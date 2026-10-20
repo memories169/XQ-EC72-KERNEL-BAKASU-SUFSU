@@ -19,14 +19,14 @@ KERNEL_REF="${KERNEL_REF:-lineage-24.0}"
 KERNEL_COMMIT="${KERNEL_COMMIT:-3cded11904540db5fb4dc91fdade46e90ad6bba8}"
 
 BAKASU_REPO="${BAKASU_REPO:-https://github.com/Baka-SU/BakaSU.git}"
-BAKASU_COMMIT="${BAKASU_COMMIT:-7c383cfeef3a2ac450f2f1273dae74bd50356d31}"
+BAKASU_COMMIT="${BAKASU_COMMIT:-9097b1a1c6c889756201bbc5713a84a9b23f7908}"
 
 SUSFS_REPO="${SUSFS_REPO:-https://gitlab.com/simonpunk/susfs4ksu.git}"
 SUSFS_REF="${SUSFS_REF:-gki-android14-6.1}"
-SUSFS_COMMIT="${SUSFS_COMMIT:-b57ed1998b82c4e3a2a81cdbf11172a560979c40}"
+SUSFS_COMMIT="${SUSFS_COMMIT:-5192aa2d33b381b58c1051532f9e1dfa5de6e8d3}"
 
 NOMOUNT_REPO="${NOMOUNT_REPO:-https://github.com/maxsteeel/nomount.git}"
-NOMOUNT_COMMIT="${NOMOUNT_COMMIT:-7046c7ad3ee0bf4ae66e80f6b93b1e30db0cb4e3}"
+NOMOUNT_COMMIT="${NOMOUNT_COMMIT:-682f7b20bc3c177871c80bbd02c600e472f0df46}"
 
 PATCHES_REPO="${PATCHES_REPO:-https://github.com/WildKernels/kernel_patches.git}"
 PATCHES_COMMIT="${PATCHES_COMMIT:-fa76c90e2cb284e6ce22b0b008ad4dd19820dbb1}"
@@ -220,14 +220,78 @@ apply_susfs() {
     cp "$SUSFS_DIR/kernel_patches/include/linux/susfs.h" "$KERNEL_DIR/include/linux/"
     cp "$SUSFS_DIR/kernel_patches/include/linux/susfs_def.h" "$KERNEL_DIR/include/linux/"
 
-    # BakaSU da co feature/selinux_hide.c tu hook runtime cac ham selinux.
-    # Patch SUSFS them wrapper goi my_write_context/my_setprocattr (static trong
-    # BakaSU) nen se gay loi link. Bo 2 file nay, giu phan con lai cua SUSFS.
-    git -C "$KERNEL_DIR" apply --whitespace=nowarn \
-        --exclude='security/selinux/hooks.c' \
-        --exclude='security/selinux/selinuxfs.c' \
-        "$patch"
-    info "da ap dung $(basename "$patch") (bo qua hook selinux cua SUSFS)"
+    # BakaSU 9097b1a1 da tuong thich voi hook SELinux cua SUSFS 5192aa2d.
+    # Ap dung day du patch, giong ban kernel Wild dang boot tot.
+    local apply_log="$WORKDIR/susfs-apply.log"
+    set +e
+    git -C "$KERNEL_DIR" apply --whitespace=nowarn --reject "$patch" >"$apply_log" 2>&1
+    local apply_rc=$?
+    set -e
+
+    if [ "$apply_rc" -ne 0 ]; then
+        local -a rejects=()
+        mapfile -t rejects < <(find "$KERNEL_DIR" -name '*.rej' -print)
+
+        # Sony sm8650 co them #include <trace/hooks/blk.h> trong fs/namespace.c
+        # nen hunk dau tien cua SUSFS 5192 khong khop context. Cac hunk con lai
+        # van ap dung binh thuong. Chi chap nhan duy nhat reject nay va sua tay.
+        if [ "${#rejects[@]}" -eq 1 ] && \
+           [ "${rejects[0]}" = "$KERNEL_DIR/fs/namespace.c.rej" ]; then
+            info "SUSFS 5192: xu ly khac biet context fs/namespace.c cua Sony"
+            python3 - "$KERNEL_DIR/fs/namespace.c" <<'PY'
+import sys
+
+path = sys.argv[1]
+with open(path) as f:
+    src = f.read()
+
+if "#include <linux/susfs_def.h>" not in src:
+    needle = "#include <linux/mnt_idmapping.h>\n"
+    if src.count(needle) != 1:
+        raise SystemExit("fs/namespace.c: khong tim thay mnt_idmapping.h")
+    src = src.replace(
+        needle,
+        needle
+        + "#ifdef CONFIG_KSU_SUSFS\n"
+        + "#include <linux/susfs_def.h>\n"
+        + "#endif // #ifdef CONFIG_KSU_SUSFS\n",
+        1,
+    )
+
+if "#define CL_COPY_MNT_NS BIT(25)" not in src:
+    block = (
+        "\n#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n"
+        "extern bool susfs_is_current_ksu_domain(void);\n"
+        "extern struct static_key_true susfs_is_sdcard_android_data_not_decrypted;\n"
+        "\n"
+        "#define CL_COPY_MNT_NS BIT(25) /* used by copy_mnt_ns() */\n"
+        "#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n"
+    )
+    marker = '#include <trace/hooks/blk.h>\n'
+    if marker in src:
+        src = src.replace(marker, marker + block, 1)
+    else:
+        marker = '#include "internal.h"\n'
+        if src.count(marker) != 1:
+            raise SystemExit("fs/namespace.c: khong tim thay diem chen SUSFS")
+        src = src.replace(marker, marker + block, 1)
+
+with open(path, "w") as f:
+    f.write(src)
+PY
+            rm -f "$KERNEL_DIR/fs/namespace.c.rej"
+        else
+            cat "$apply_log"
+            die "SUSFS 5192 apply that bai (reject khong nhu du kien)"
+        fi
+    fi
+
+    if find "$KERNEL_DIR" -name '*.rej' -print -quit | grep -q .; then
+        find "$KERNEL_DIR" -name '*.rej' -print
+        die "Con file .rej sau khi ap dung SUSFS"
+    fi
+
+    info "da ap dung day du $(basename "$patch")"
 }
 
 # ---------------------------------------------------------------------------
