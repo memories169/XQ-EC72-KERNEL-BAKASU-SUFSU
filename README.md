@@ -1,6 +1,6 @@
-# Kernel Sony Xperia 1 VI (pdx245 / XQ-C72)
+# Kernel Sony Xperia 1 VI (pdx245 / XQ-EC72)
 
-Kernel custom cho **Sony Xperia 1 VI** (mã máy `pdx245`, model `XQ-C72` / `XQ-EC54` / `XQ-EC72`), build từ source LineageOS `android_kernel_sony_sm8650` (Linux 6.1 GKI) với:
+Kernel custom cho **Sony Xperia 1 VI** (mã máy `pdx245`, model `XQ-EC54` / `XQ-EC72`), build từ source LineageOS `android_kernel_sony_sm8650` (Linux 6.1 GKI) với:
 
 - **BakaSU** – KernelSU fork, hỗ trợ nhiều manager.
 - **SUSFS** – ẩn root, mount, path, map… khỏi các app detect.
