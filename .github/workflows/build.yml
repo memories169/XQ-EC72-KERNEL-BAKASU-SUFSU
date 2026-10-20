@@ -1,0 +1,119 @@
+name: Build XQ-C72 Kernel
+
+on:
+  workflow_dispatch:
+    inputs:
+      kernel_commit:
+        description: "Commit kernel (de trong = dung mac dinh trong scripts/build.sh)"
+        required: false
+        default: ""
+      bakasu_commit:
+        description: "Commit BakaSU (de trong = mac dinh)"
+        required: false
+        default: ""
+      susfs_commit:
+        description: "Commit SUSFS (de trong = mac dinh)"
+        required: false
+        default: ""
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build kernel + AnyKernel3
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+
+    env:
+      WORKDIR: ${{ github.workspace }}/work
+      JOBS: 4
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/share/boost
+          df -h
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison flex libssl-dev libelf-dev dwarves \
+            cpio rsync zip unzip zstd lz4 python3 git curl
+          clang --version || true
+          pahole --version || true
+
+      - name: Setup swap
+        run: |
+          sudo fallocate -l 8G /swapfile || \
+            sudo dd if=/dev/zero of=/swapfile bs=1M count=8192
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          free -h
+
+      - name: Cache toolchain
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.WORKDIR }}/toolchain
+          key: toolchain-${{ runner.os }}-${{ hashFiles('scripts/build.sh') }}
+          restore-keys: |
+            toolchain-${{ runner.os }}-
+
+      - name: Build kernel
+        env:
+          KERNEL_COMMIT: ${{ inputs.kernel_commit }}
+          BAKASU_COMMIT: ${{ inputs.bakasu_commit }}
+          SUSFS_COMMIT: ${{ inputs.susfs_commit }}
+        run: |
+          chmod +x scripts/build.sh
+          ./scripts/build.sh
+
+      - name: Show build info
+        run: |
+          cat work/dist/kernel.release
+          ls -lh work/dist
+
+      - name: Write summary
+        run: |
+          {
+            echo "## XQ-C72 kernel build"
+            echo ""
+            echo "- Kernel release: \`$(cat work/dist/kernel.release)\`"
+            echo "- Features: BakaSU + SUSFS + NoMount + BBRv3"
+            echo "- Zip: \`$(basename work/dist/*.zip)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: XQ-C72-kernel-${{ github.run_number }}
+          path: |
+            work/dist/*.zip
+            work/dist/Image
+            work/dist/kernel.release
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: work/dist/*.zip
+          generate_release_notes: true
+          fail_on_unmatched_files: true
