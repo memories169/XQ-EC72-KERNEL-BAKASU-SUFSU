@@ -34,6 +34,12 @@ PATCHES_COMMIT="${PATCHES_COMMIT:-fa76c90e2cb284e6ce22b0b008ad4dd19820dbb1}"
 ANYKERNEL_REPO="${ANYKERNEL_REPO:-https://github.com/osm0sis/AnyKernel3.git}"
 ANYKERNEL_COMMIT="${ANYKERNEL_COMMIT:-020dfeccf9d7e962a48400fc94d3e451df92eead}"
 
+# AnyKernel3 upstream chi kem binary 32-bit ARM; SM8650 (pdx245) khong chay
+# duoc ELF32, nen thay magiskboot/busybox bang ban arm64 tu Magisk APK.
+MAGISK_VERSION="${MAGISK_VERSION:-30.7}"
+MAGISK_APK_URL="${MAGISK_APK_URL:-https://github.com/topjohnwu/Magisk/releases/download/v${MAGISK_VERSION}/Magisk-v${MAGISK_VERSION}.apk}"
+MAGISK_APK_SHA256="${MAGISK_APK_SHA256:-e0d32d2123532860f97123d927b1bb86c4e08e6fd8a48bfc6b5bee0afae9ebd5}"
+
 # ---------------------------------------------------------------------------
 # Cau hinh build
 # ---------------------------------------------------------------------------
@@ -327,6 +333,41 @@ build_kernel() {
 }
 
 # ---------------------------------------------------------------------------
+# Thay binary arm64 cho AnyKernel3
+# ---------------------------------------------------------------------------
+install_arm64_tools() {
+    local apk cache tmp
+    cache="$WORKDIR/cache"
+    apk="$cache/Magisk-v${MAGISK_VERSION}.apk"
+    mkdir -p "$cache"
+
+    if [ ! -f "$apk" ]; then
+        log "Tai Magisk v${MAGISK_VERSION} (lay magiskboot/busybox arm64)"
+        curl -fL --retry 3 --retry-delay 2 -o "$apk.tmp" "$MAGISK_APK_URL"
+        echo "${MAGISK_APK_SHA256}  $apk.tmp" | sha256sum -c - >/dev/null \
+            || die "Checksum Magisk APK khong khop"
+        mv -f "$apk.tmp" "$apk"
+    fi
+
+    echo "${MAGISK_APK_SHA256}  $apk" | sha256sum -c - >/dev/null \
+        || die "Checksum Magisk APK khong khop: $apk"
+
+    tmp="$(mktemp -d)"
+    unzip -q -o "$apk" \
+        'lib/arm64-v8a/libmagiskboot.so' \
+        'lib/arm64-v8a/libbusybox.so' -d "$tmp" \
+        || die "Khong giai nen duoc Magisk APK"
+
+    install -m 0755 "$tmp/lib/arm64-v8a/libmagiskboot.so" "$ANYKERNEL_DIR/tools/magiskboot"
+    install -m 0755 "$tmp/lib/arm64-v8a/libbusybox.so" "$ANYKERNEL_DIR/tools/busybox"
+    rm -rf "$tmp"
+
+    file "$ANYKERNEL_DIR/tools/magiskboot" | grep -q 'ARM aarch64' \
+        || die "magiskboot khong phai binary arm64"
+    info "magiskboot/busybox: arm64 (Magisk v${MAGISK_VERSION})"
+}
+
+# ---------------------------------------------------------------------------
 # Dong goi AnyKernel3
 # ---------------------------------------------------------------------------
 package_kernel() {
@@ -342,6 +383,8 @@ package_kernel() {
     cp "$REPO_DIR/scripts/anykernel.sh" "$ANYKERNEL_DIR/anykernel.sh"
     sed -i "s|@KERNEL_STRING@|XQ-C72 ${release} - BakaSU + SUSFS + NoMount|g" \
         "$ANYKERNEL_DIR/anykernel.sh"
+
+    install_arm64_tools
 
     zip="$DIST_DIR/XQ-C72_${release}_BakaSU-SUSFS-NoMount.zip"
     rm -f "$zip"

@@ -106,6 +106,8 @@ File zip AnyKernel3 có thể flash bằng:
 Sau khi flash, reboot. Cài **BakaSU Manager** (APK trong repo BakaSU) để quản lý root.
 
 > **Lưu ý cho pdx245 (GKI)**: partition `boot` chỉ chứa kernel + dtb, **không có ramdisk** (ramdisk nằm ở `init_boot`). Vì vậy `scripts/anykernel.sh` dùng `split_boot` + `flash_boot` và đặt `NO_MAGISK_CHECK=1`, không dùng `dump_boot`/`write_boot`. Nếu dùng script AnyKernel3 mặc định sẽ báo `No ramdisk found to unpack. Aborting`.
+>
+> AnyKernel3 gốc chỉ kèm `magiskboot`/`busybox` bản 32-bit ARM; SM8650 không chạy được ELF32 nên `scripts/build.sh` tự tải Magisk v30.7 (pin SHA-256) và thay bằng binary **arm64** trước khi đóng gói.
 
 ### Nếu máy không boot
 
@@ -209,6 +211,7 @@ Cập nhật phiên bản: sửa biến tương ứng ở đầu `scripts/build.
 | Vendor module không load | Kiểm tra `kernel.release` có `android14-11`; không đổi `KMI_GENERATION` |
 | Máy bootloop | Flash lại boot gốc, xem log `dmesg`/`last_kmsg` nếu còn truy cập được |
 | `No ramdisk found to unpack` khi flash | Dùng bản zip mới (AnyKernel3 dùng `split_boot`/`flash_boot`); pdx245 có ramdisk ở `init_boot`, không phải `boot` |
+| `tools/magiskboot: syntax error: unexpected word` | Binary 32-bit ARM không chạy được trên SM8650; dùng bản zip build bằng `scripts/build.sh` mới (tự thay `magiskboot`/`busybox` arm64 từ Magisk) |
 
 ---
 
