@@ -105,6 +105,8 @@ File zip AnyKernel3 có thể flash bằng:
 
 Sau khi flash, reboot. Cài **BakaSU Manager** (APK trong repo BakaSU) để quản lý root.
 
+> **Lưu ý cho pdx245 (GKI)**: partition `boot` chỉ chứa kernel + dtb, **không có ramdisk** (ramdisk nằm ở `init_boot`). Vì vậy `scripts/anykernel.sh` dùng `split_boot` + `flash_boot` và đặt `NO_MAGISK_CHECK=1`, không dùng `dump_boot`/`write_boot`. Nếu dùng script AnyKernel3 mặc định sẽ báo `No ramdisk found to unpack. Aborting`.
+
 ### Nếu máy không boot
 
 1. Vào fastboot: giữ `Power + Volume Down`.
@@ -206,6 +208,7 @@ Cập nhật phiên bản: sửa biến tương ứng ở đầu `scripts/build.
 | `pahole not found` | Cài `dwarves` (CI đã cài) |
 | Vendor module không load | Kiểm tra `kernel.release` có `android14-11`; không đổi `KMI_GENERATION` |
 | Máy bootloop | Flash lại boot gốc, xem log `dmesg`/`last_kmsg` nếu còn truy cập được |
+| `No ramdisk found to unpack` khi flash | Dùng bản zip mới (AnyKernel3 dùng `split_boot`/`flash_boot`); pdx245 có ramdisk ở `init_boot`, không phải `boot` |
 
 ---
 
