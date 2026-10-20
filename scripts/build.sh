@@ -276,6 +276,12 @@ fix_host_tools() {
 configure_kernel() {
     log "Merge defconfig cho pdx245"
 
+    # GKI release phai khop voi module stock trong vendor_dlkm/vendor_boot.
+    # Ban build LineageOS pdx245 co release: 6.1.176-g3cded1190454
+    # (khong co -android14-11, khong co -dirty). .scmversion duoc
+    # scripts/setlocalversion doc truoc khi kiem tra git.
+    printf '%s\n' "-g${KERNEL_COMMIT:0:12}" > "$KERNEL_DIR/.scmversion"
+
     rm -rf "$OUT_DIR"
     mkdir -p "$OUT_DIR"
 

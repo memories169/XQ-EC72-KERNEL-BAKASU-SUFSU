@@ -182,14 +182,14 @@ Cập nhật phiên bản: sửa biến tương ứng ở đầu `scripts/build.
 5. Tích hợp NoMount (`fs/nomount`).
 6. Apply patch BBRv3.
 7. Merge defconfig và kiểm tra các option bắt buộc.
-8. `make Image` với `BRANCH=android14-6.1`, `KMI_GENERATION=11`, `KCFLAGS=-DKSU_NO_PREINIT`.
+8. Ghi `.scmversion` để `kernel.release` khớp bản stock `6.1.176-g3cded1190454`, rồi `make Image` với `BRANCH=android14-6.1`, `KMI_GENERATION=11`, `KCFLAGS=-DKSU_NO_PREINIT`.
 9. Đóng gói AnyKernel3.
 
 ---
 
 ## 8. Ghi chú kỹ thuật
 
-- **KMI**: kernel giữ `KMI_GENERATION=11` và `BRANCH=android14-6.1` để vendor modules của ROM load được. Module vendor dùng CRC (`CONFIG_MODVERSIONS`) nên không cần trùng chính xác chuỗi `kernel.release`.
+- **KMI / vermagic**: vendor modules của ROM yêu cầu **đúng** `vermagic`, gồm cả `kernel.release`. Bản LineageOS pdx245 stock dùng `6.1.176-g3cded1190454` (không có `-android14-11`, không có `-dirty`). Vì vậy script ghi `.scmversion` = `-g<KERNEL_COMMIT>` trước khi build; không thêm `-android14-11` hay để cây source bị dirty. Ngoài vermagic, `CONFIG_MODVERSIONS` còn kiểm tra CRC từng symbol; cấu hình hiện tại giữ nguyên các option ảnh hưởng ABI so với stock.
 - **BakaSU + SUSFS**: BakaSU hiện chưa có `ksu_preinit_*`, nên build thêm `-DKSU_NO_PREINIT` để patch SUSFS bỏ phần preinit.
 - **SUSFS inline hook**: chọn `CONFIG_KSU_SUSFS=y`, không bật tracepoint/manual hook.
 - **SELinux hiding**: BakaSU có `feature/selinux_hide.c` hook runtime, nên patch SUSFS được áp dụng loại trừ `security/selinux/hooks.c` và `security/selinux/selinuxfs.c` để tránh xung đột/lỗi link.
@@ -208,7 +208,7 @@ Cập nhật phiên bản: sửa biến tương ứng ở đầu `scripts/build.
 | Hết dung lượng `/tmp` | Đặt `WORKDIR` sang ổ lớn hơn; script dùng `WORKDIR`, không dùng `/tmp` cho source |
 | Hết RAM/OOM | Giảm `JOBS`, tăng swap |
 | `pahole not found` | Cài `dwarves` (CI đã cài) |
-| Vendor module không load | Kiểm tra `kernel.release` có `android14-11`; không đổi `KMI_GENERATION` |
+| Vendor module không load | Kiểm tra `work/dist/kernel.release` phải đúng `6.1.176-g3cded1190454`; kiểm tra `.scmversion` và không để release có `-android14-11`/`-dirty` |
 | Máy bootloop | Flash lại boot gốc, xem log `dmesg`/`last_kmsg` nếu còn truy cập được |
 | `No ramdisk found to unpack` khi flash | Dùng bản zip mới (AnyKernel3 dùng `split_boot`/`flash_boot`); pdx245 có ramdisk ở `init_boot`, không phải `boot` |
 | `tools/magiskboot: syntax error: unexpected word` | Binary 32-bit ARM không chạy được trên SM8650; dùng bản zip build bằng `scripts/build.sh` mới (tự thay `magiskboot`/`busybox` arm64 từ Magisk) |
