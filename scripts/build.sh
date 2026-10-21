@@ -340,6 +340,19 @@ fix_host_tools() {
 configure_kernel() {
     log "Merge defconfig cho pdx245"
 
+    # Module stock trong system_dlkm (rfkill.ko, ...) duoc Sony ky bang key
+    # khac voi key tu build. CONFIG_MODULE_SIG_PROTECT vi vay tu choi cac
+    # module xuat protected GKI symbol (rfkill_alloc, ...). Hau qua:
+    # btpower.ko khong load duoc -> bt_fm_slim.ko thieu symbol ->
+    # btfmslim_slave khong dang ky -> sound card defer mai -> bootloop.
+    # Lam rong danh sach protected exports de module stock load duoc, giong
+    # cach Wild build. Khong dong vao configs/xq-c72.config.
+    local protected_exports="$KERNEL_DIR/android/abi_gki_protected_exports_aarch64"
+    if [ -f "$protected_exports" ]; then
+        : > "$protected_exports"
+        info "da vo hieu hoa GKI protected exports (de load module system_dlkm stock)"
+    fi
+
     # GKI release phai khop voi module stock trong vendor_dlkm/vendor_boot.
     # Ban build LineageOS pdx245 co release: 6.1.176-g3cded1190454
     # (khong co -android14-11, khong co -dirty). .scmversion duoc
