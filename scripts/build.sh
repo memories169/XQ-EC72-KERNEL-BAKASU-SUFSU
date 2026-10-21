@@ -391,7 +391,6 @@ build_kernel() {
 
     make -C "$KERNEL_DIR" O="$OUT_DIR" ARCH=arm64 LLVM=1 LLVM_IAS=1 \
         BRANCH="$BRANCH" KMI_GENERATION="$KMI_GENERATION" \
-        KCFLAGS="-DKSU_NO_PREINIT" \
         HOSTCFLAGS="-DUSE_PKCS11_ENGINE" \
         KBUILD_BUILD_USER="xq-c72" \
         KBUILD_BUILD_HOST="github-actions" \
@@ -432,7 +431,9 @@ install_arm64_tools() {
     install -m 0755 "$tmp/lib/arm64-v8a/libbusybox.so" "$ANYKERNEL_DIR/tools/busybox"
     rm -rf "$tmp"
 
-    file "$ANYKERNEL_DIR/tools/magiskboot" | grep -q 'ARM aarch64' \
+    # PATH trong buoc build co toybox "file" cua AOSP; no in "arm64" thay vi
+    # "ARM aarch64" cua GNU file. Chap nhan ca hai dinh dang.
+    file "$ANYKERNEL_DIR/tools/magiskboot" | grep -Eq 'ARM aarch64|arm64' \
         || die "magiskboot khong phai binary arm64"
     info "magiskboot/busybox: arm64 (Magisk v${MAGISK_VERSION})"
 }
